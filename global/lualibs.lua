@@ -4,6 +4,11 @@
  --i:表示适用于iv
  --k:表示适用于kv
  --a:表示适用于iv、kv
+ 	function table.merge(dst,src)
+ 		for k,v in pairs(src) do
+ 			dst[k] = v
+ 		end
+ 	end
 	--a:设置值
 	function table.set(t,k,v)
 		t[k] = v
@@ -19,10 +24,30 @@
 		end
 	end
 
+	--双向索引
+	function table.bidir(vt)
+		local tmp = {}-- dont read while write!!!
+		for k,v in pairs(vt) do
+			tmp[v] = k
+		end
+		for k,v in pairs(tmp) do
+			vt[k] = v
+		end
+		return vt
+	end
+
+	function table.es6table(vt)
+		local t = {}
+		for k,v in pairs(vt) do
+			print(k,v)
+			t[v] = v
+		end
+		return t
+	end
 	--a:深层检索table
 	--@param table 被检索表
-	--@param ... k名序列，如：table.find(avatar,"avatar","equipments","weapon")
-	function table.find(table,...)
+	--@param ... k名序列，如：table.path(avatar,"avatar","equipments","weapon")
+	function table.path(table,...)
 		local args = {...}
 		local obj = table
 		for i,v in ipairs(args) do
@@ -123,13 +148,31 @@
 	end
 
 	function table.filter(t, fn)
+		local ret = {}
 	    for k, v in pairs(t) do
-	        if not fn(v, k) then t[k] = nil end
+	        if fn(v, k) then ret[k] = v end
 	    end
-	    return t
+	    return ret
 	end
 
 --string
+	string.split = string.split or function(inputstr, sep)
+	        if sep == nil then
+	                sep = "%s"
+	        end
+	        local t={} ; i=1
+	        for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+	                t[i] = str
+	                i = i + 1
+	        end
+	        return t
+	end
+	function string.trim(str)
+		if not str then return "" end
+	    str = string.gsub(str, "^[ \t\n\r]+", "")
+	    return string.gsub(str, "[ \t\n\r]+$", "")
+	end
+
 	function string.isMatch(str,rule)
 		local i,j,s = string.find(str,rule)
 		if s == str then
@@ -213,6 +256,7 @@
 		return 0
 	end
 
+	--t:from 0. to 1.
 	function math.Lerp(a,b,t)
 		return a + (b-a)*t
 	end
@@ -272,6 +316,13 @@
 	    return str
 	end
 
+	--return days in a month
+	function daysOf(m,y)
+		return m==2 
+		and	y and (y%400==0~=(y%100==0)~=(y%4==0) and 29 or 28)
+		or	m%2 == 1 == (m<8) and 31 or 30
+	end
+	
 	-- _runOnceTable = {}
 	-- function runOnce__( func,... )
 	-- 	local key = tostring(func)
@@ -286,92 +337,3 @@
 	-- 	_runOnceTable[key] = nil
 	-- end
 
---getset-supported-class,deprecated,use metatable.lua instead.
-	function access(remoteTable)
-	    local assistTable = {remote = remoteTable}
-	    assistTable.rawset = function(k,v)
-	        remoteTable[k] = v
-	    end
-	    assistTable.rawget = function(k)
-	        return remoteTable[k]
-	    end
-	    assistTable.localization = function(t)
-	        for k,v in pairs(t) do
-	        	rawset(assistTable,k,v)
-	        end
-	    end  
-	    setmetatable(assistTable,{
-	        __index = function(t,k)
-	            if type(remoteTable[k]) == "table" and remoteTable[k].get then
-	                return remoteTable[k].get(remoteTable,k)
-	            else
-	                return remoteTable[k]-- or getmetatable(assistTable) and getmetatable(assistTable)[k]
-	            end
-	        end,
-	        __newindex = function(t,k,v)
-	            if type(remoteTable[k]) == "table" and remoteTable[k].set then
-	                remoteTable[k].set(remoteTable,k,v)
-	            else
-	                remoteTable[k] = v
-	            end
-	        end
-	    })
-	    return assistTable
-	end
-
-	Accessor = function(t)
-		local function innerFunc()
-			local assistTable = access(clone(t))
-			assistTable.localization {
-				getter = getmetatable(assistTable).__index,
-				setter = getmetatable(assistTable).__newindex
-			}
-			return assistTable
-		end
-		return innerFunc
-	end
-
-	function luacls(clsname,super)
-		local cls = {__name = clsname,ctor = function() end}
-		local superType = type(super)
-		if superType == "table" then
-			cls.super = super
-			cls.__create = function(...)
-				if super.new then
-					return super.new(...)
-				else
-					return {}
-				end
-			end
-			setmetatable(cls,{__index = super})
-		elseif superType == "function" then
-			cls.__create = function(...)
-				local inst = super(...)
-				if inst.class then
-					cls.super = inst.class
-					setmetatable(cls,{__index = cls.super})
-				end
-				return inst
-			end
-		elseif super == nil then
-			cls.__create = function()
-				return {}
-			end
-		else
-			error("bad class type:"..superType)
-		end
-
-		cls.new = function(...)
-			local instance = cls.__create(...)
-			rawset(instance,"class",cls)
-			local mt = getmetatable(instance) or {}
-			mt.__index = function(t,k)
-				return cls[k] or rawget(t,"getter") and rawget(t,"getter")(t,k)
-			end
-			setmetatable(instance,mt)
-			instance:ctor(...)
-			return instance
-		end
-
-		return cls
-	end

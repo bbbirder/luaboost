@@ -31,7 +31,8 @@ function stringify(val)
 	} or error("cannot stringify type:"..type(val),2) 
 end
 
---TODO
+--[[使用prefix中的script]]do return end
+
 --内嵌执行string，可访问局部变量
 function script(s)
 	local prefix,suffix = "",""

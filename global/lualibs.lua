@@ -4,16 +4,48 @@
  --i:表示适用于iv
  --k:表示适用于kv
  --a:表示适用于iv、kv
+ 	function table.exists(t,tar)
+ 		for k,v in pairs(t) do
+ 			if tar==v then return true end
+ 		end
+ 	end
+ 	function table.maxn(t)
+        if type(t)~="table" then return 0 end
+ 		local n = 0
+ 		for k,v in pairs(t) do
+ 			n = n+1
+ 		end
+ 		return n
+ 	end
+ 	function table.keys(t)
+ 		local ret = {}
+ 		for k,v in pairs(t) do
+ 			table.insert(ret,k)
+ 		end
+ 		table.sort(ret)
+ 		return ret
+ 	end
+ 	function table.vals(t)
+ 		local ret = {}
+ 		for k,v in pairs(t) do
+ 			table.insert(ret,v)
+ 		end
+ 		table.sort(ret)
+ 		return ret
+ 	end
  	function table.merge(dst,src)
  		for k,v in pairs(src) do
  			dst[k] = v
  		end
  	end
 	--a:设置值
-	function table.set(t,k,v)
+	function table.newindex(t,k,v)
 		t[k] = v
 	end
 
+    function table.index(t,k,default)
+        return t[k] or default
+    end
 	--i:把一条v值替换为其他多条v值，常用于数据转换
 	--@param idx 目标索引
 	--@param t2 源iv表
@@ -104,7 +136,7 @@
 		return ret
 	end
 
-	function table.group(func)
+	function table.group(self,func)
 		local t = {}
 		for _,v in pairs(self) do
 			local k = func(v,_)
@@ -115,10 +147,14 @@
 	end
 
 	function table.newSheet(headers)
-		local function newRow(row)
+		local function newRow(rows)
 			local ret = {}
-			for i,v in pairs(headers) do
-				ret[v] = row[i]
+			for _,row in ipairs(rows) do
+				local _ret = {}
+				for i,v in ipairs(headers) do
+					_ret[v] = row[i]
+				end
+				table.insert(ret,_ret)
 			end
 			return ret
 		end
@@ -126,18 +162,21 @@
 	end
 
 	function table.each2(t,func)
-		local ret = {}
+        if #t<2 then return false end 
 		for i=1,#t-1 do
-			ret[i] = func(t[i],t[i+1])
+			if not func(t[i],t[i+1]) then
+				return false
+			end
 		end
-		return ret
+		return true
 	end
 
 	function table.map(t, fn)
+		local ret = {}
 	    for k, v in pairs(t) do
-	        t[k] = fn(v, k)
+	        ret[k] = fn(v, k)
 	    end
-	    return t
+	    return ret
 	end
 
 	function table.walk(t, fn)
@@ -147,26 +186,37 @@
 	    return t
 	end
 
-	function table.filter(t, fn)
-		local ret = {}
-	    for k, v in pairs(t) do
-	        if fn(v, k) then ret[k] = v end
-	    end
-	    return ret
-	end
+    function table.filter(t, fn)
+        local ret = {}
+        for k, v in ipairs(t) do
+            if fn(v, k) then table.insert(ret,v) end
+        end
+        return ret
+    end
 
 --string
 	string.split = string.split or function(inputstr, sep)
-	        if sep == nil then
-	                sep = "%s"
-	        end
-	        local t={} ; i=1
-	        for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-	                t[i] = str
-	                i = i + 1
-	        end
-	        return t
+        if sep == nil then
+            sep = "%s"
+        end
+        local t={} ; i=1
+        for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+            t[i] = str
+            i = i + 1
+        end
+        return t
 	end
+	--like python [2:] [3:] [2,-2]
+	--like javasript String.slice
+	--but it starts from 1(-1) at two sides
+	function string.slice(s,f,t)
+		f = f or 0
+		t = t or #s
+		if f<0 then f = #s+f+1 end
+		if t<0 then t = #s+t+1 end
+		return s:sub(f,t)
+	end
+
 	function string.trim(str)
 		if not str then return "" end
 	    str = string.gsub(str, "^[ \t\n\r]+", "")
@@ -181,6 +231,11 @@
 		return false
 	end
 
+	function string.endWith(str,s)
+		if #s>#str then return false end
+		return str:sub(#str-~-#s)==s
+	end
+	
 	--ignore this
 		---------------------------------------
 		function string.encode(s)
@@ -217,6 +272,54 @@
 		return a and cc.c4b(r,g,b,a) or cc.c3b(r,g,b)
 	end
 
+
+	function string.toChinese(n)
+		local n = tostring(n)
+		assert(not n:match("e"),"out value")
+		local sint= n:gsub("%..*","")
+		local len = #sint
+		assert(len<=8,"number too big")
+		local units = {
+			"s","b","q","w",
+		}
+		for i=len-1,1,-1 do
+			sint = sint:slice(1,i)..(units[(len-i-1)%4+1] or "?")..sint:slice(i+1)
+		end
+		return (
+			(
+				sint:gsub("0%w","0")
+					:gsub("0+","0")
+					:gsub("01s","0s")
+					:gsub("^1s","s")
+					:gsub("%-b1s","-bs")
+					:gsub("(%d%w%dw)0$","%1")
+					:gsub("(%d%w%d)%w0$","%1")
+					:gsub("(.)0$","%1")
+				..(n:match("%.%d+") or "")
+			)
+			:gsub("%d",{
+				["0"] = "零",
+				["1"] = "一",
+				["2"] = "二",
+				["3"] = "三",
+				["4"] = "四",
+				["5"] = "五",
+				["6"] = "六",
+				["7"] = "七",
+				["8"] = "八",
+				["9"] = "九",
+			})
+			:gsub("%-%w","负")
+			:gsub("%w",{
+				["s"] = "十",
+				["b"] = "百",
+				["q"] = "千",
+				["w"] = "万",
+			})
+			:gsub("%.","点")
+		)
+	end
+
 --math
 	--statistics
 	function math.sum(t,f)
@@ -247,13 +350,10 @@
 		return min + (v - min) % (max - min)
 	end
 
+	-- return: -1,0,1
 	function math.sgn(v)
-		if v > 0 then
-			return 1
-		elseif v < 0 then
-			return -1
-		end
-		return 0
+		v = v // 1 | 0
+		return (-v>>63)-(v>>63)
 	end
 
 	--t:from 0. to 1.
@@ -261,6 +361,74 @@
 		return a + (b-a)*t
 	end
 
+	--fast log2, arg should equals (0x1p?)，最低位1的位数
+	local _euler_map = { [0] = 
+		0x00,	0x01,	0x30,	0x02,	0x39,	0x31,	0x1c,	0x03,	
+		0x3d,	0x3a,	0x32,	0x2a,	0x26,	0x1d,	0x11,	0x04,	
+		0x3e,	0x37,	0x3b,	0x24,	0x35,	0x33,	0x2b,	0x16,	
+		0x2d,	0x27,	0x21,	0x1e,	0x18,	0x12,	0x0c,	0x05,	
+		0x3f,	0x2f,	0x38,	0x1b,	0x3c,	0x29,	0x25,	0x10,	
+		0x36,	0x23,	0x34,	0x15,	0x2c,	0x20,	0x17,	0x0b,	
+		0x2e,	0x1a,	0x28,	0x0f,	0x22,	0x14,	0x1f,	0x0a,	
+		0x19,	0x0e,	0x13,	0x09,	0x0d,	0x08,	0x07,	0x06,	
+	}
+	function math.log2(n)--n = 0x1p?
+		return _euler_map[0x03f79d71b4cb0a89*(n&-n) >> 58] --0~63
+	end
+
+	--fast log2,arg should equals (0x1p?)，最高位1的位数，结果为整数，可以作为牛顿迭代法的估计值
+	-- 最快的方法只能在有指针的语言下实现，对应C代码：
+	--[[
+		//int_num is in float type, but should be an integer.
+		inline int h_log2(float int_num) {
+			return (*(__int32*)&int_num) + 0x800000 << 2 >> 25;
+		}
+		//eg:printf("%d\n",h_log2(45687)); printf("%d\n",1<<h_log2(4687));
+	]]
+	-- 
+	-- 为避免编译器不同实现，使用汇编指令:(x86 only)
+	--[[
+		int __stdcall h_log2(float int_num) {
+			__asm {
+				mov eax, int_num
+				lea eax,[eax*4+0x2000000]
+				shr eax,25
+			}
+		}
+	]]
+	-- 使用swig导出后可以在lua中使用.
+	-- 替代方案：
+	function math.highest1(n)
+		n = n | n>>1
+		n = n | n>>2
+		n = n | n>>4
+		n = n | n>>8
+		n = n | n>>16
+		n = n | n>>32
+		n = n>>1
+		return n+1
+	end
+	function math.h_log2(n)
+		n = math.highest1(n)
+		return _euler_map[0x03f79d71b4cb0a89*n >> 58]
+	end
+	-- print(math.h_log2(6564))
+	
+	function math.cnt1(bits)
+		local cnt = 0
+		while bits~=0 do
+			bits = bits & ~-bits
+			cnt = cnt + 1
+		end
+		return cnt
+	end
+	function math.each1bit(bits)
+		return function()
+			local b = bits&-bits
+			bits = bits&~-bits
+			if b~=0 then return b end
+		end
+	end
 --useless
 	function filterEmoji(username)
 	    local usernameRight = ""
@@ -316,13 +484,20 @@
 	    return str
 	end
 
-	--return days in a month
+	--return days count in a month
 	function daysOf(m,y)
+		y = y or 1990
 		return m==2 
-		and	y and (y%400==0~=(y%100==0)~=(y%4==0) and 29 or 28)
-		or	m%2 == 1 == (m<8) and 31 or 30
+		and	--Feb
+			29 - (
+				-(y%4)>>63 ~
+				-(y%100)>>63 ~
+				-(y%400)>>63
+			)
+		or	--Not Feb
+			30+(m%2 ~ m>>3)
 	end
-	
+
 	-- _runOnceTable = {}
 	-- function runOnce__( func,... )
 	-- 	local key = tostring(func)

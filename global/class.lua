@@ -1,6 +1,6 @@
 -- author: bbbirder
---getset-supported-class,deprecated,use metatable.lua instead.
 
+--[[getter/setter扩展]]
 function access(remoteTable)
     local assistTable = {remote = remoteTable}
     assistTable.rawset = function(k,v)
@@ -46,6 +46,7 @@ function Accessor(t)
 	return innerFunc
 end
 
+--[[基础OOP]]
 function class(clsname,super)
 	local cls = {__name = clsname,ctor = function() end}
 	local superType = type(super)
@@ -90,3 +91,132 @@ function class(clsname,super)
 
 	return cls
 end
+
+
+--[[AOP扩展]]
+--prefix: 兼容低版本lua
+local unpack = unpack or table.unpack
+--控制标识
+ADVICE_SIGNAL_ENDALL = {}--结束过程
+ADVICE_SIGNAL_AFTER  = {}--跳转到后置增强
+ADVICE_SIGNAL_BEFORE = {}--跳转到前置增强
+ADVICE_SIGNAL_TRUNK  = {}--跳转到主函数
+
+--前置增强
+function BeforeAdvice(tar,bsrc)
+    return function(...)
+	    local res
+    	::before::
+    	res = {bsrc(...)}
+        if res[1]==ADVICE_SIGNAL_ENDALL then
+        	goto endall
+    	elseif res[1]==ADVICE_SIGNAL_AFTER then
+    		goto after
+		elseif res[1]==ADVICE_SIGNAL_BEFORE then 
+			goto before
+		elseif res[1]==ADVICE_SIGNAL_TRUNK then 
+			goto trunk
+        end
+        ::trunk::
+        res = {tar(...)}
+        ::after::
+
+        ::endall::
+        return select(2,unpack(res))
+    end
+end
+
+--后置增强
+function AfterAdvice(tar,asrc)
+    return function(...)
+	    local res
+    	::before::
+        ::trunk::
+        res = {tar(...)}
+        ::after::
+        res = {asrc(...)}
+        if res[1]==ADVICE_SIGNAL_ENDALL then
+        	goto endall
+    	elseif res[1]==ADVICE_SIGNAL_AFTER then
+    		goto after
+		elseif res[1]==ADVICE_SIGNAL_BEFORE then 
+			goto before
+		elseif res[1]==ADVICE_SIGNAL_TRUNK then 
+			goto trunk
+        end
+        ::endall::
+        return select(2,unpack(res))
+    end
+end
+
+--环绕增强
+function AroundAdvice(tar,bsrc,asrc)
+    return function(...)
+	    local res
+    	::before::
+    	res = {bsrc(...)}
+        if res[1]==ADVICE_SIGNAL_ENDALL then
+        	goto endall
+    	elseif res[1]==ADVICE_SIGNAL_AFTER then
+    		goto after
+		elseif res[1]==ADVICE_SIGNAL_BEFORE then 
+			goto before
+		elseif res[1]==ADVICE_SIGNAL_TRUNK then 
+			goto trunk
+        end
+        ::trunk::
+        res = {tar(...)}
+        ::after::
+        res = {asrc(...)}
+        if res[1]==ADVICE_SIGNAL_ENDALL then
+        	goto endall
+    	elseif res[1]==ADVICE_SIGNAL_AFTER then
+    		goto after
+		elseif res[1]==ADVICE_SIGNAL_BEFORE then 
+			goto before
+		elseif res[1]==ADVICE_SIGNAL_TRUNK then 
+			goto trunk
+        end
+        ::endall::
+        return select(2,unpack(res))
+    end
+end
+
+--增强某个类
+function EnhanceClass(cls,enhanceFunc)
+	for k,v in pairs(cls) do
+		if type(v)~="function" then goto continue end
+		local result = enhanceFunc(k,v)
+		if type(result)=="function" then cls[k] = result end
+		::continue::
+	end
+end
+
+--AOP test
+do return end
+local Foo = {}
+function Foo:meet(name)
+    print("talking with "..name.."...")
+end
+function Foo:play(name)
+    print("playing with "..name.."...")
+end
+
+EnhanceClass(Foo,function(k,method)
+	if k=="meet" then
+		return AroundAdvice(method,function(inst,name)
+		    print("we meet",name)
+		    return ADVICE_SIGNAL_TRUNK
+		end,function(inst,name)
+		    print("bye",name)
+		end)
+	elseif k=="play" then
+		return AfterAdvice(method,function(inst,name)
+			print("see u tmr,"..name)
+		end)
+	end
+end)
+
+
+Foo:meet "leo"
+Foo:play "leo"

@@ -95,7 +95,7 @@ end
             return parent.."."..v:sub(i)
         end
 
--- 短名查找常用模块
+-- 短名查找常用模块，快捷方式
 function import_redir(k) return function(v)
     local dir = whereRequirer()
     mappingPaths[k] = calcPath(dir,v)
@@ -111,8 +111,8 @@ end
         end)();
 
 
--- 跟其它语言里的enum写法类似，enum里的成员不需要定义，也不受外部变量的干扰，值会自动累加，比传统的lua enum写法精简（一般都需要双引号或者等于号）。
--- 从别的语言里复制一段enum代码到lua时也会变得方便一些。
+-- 跟其它语言里的enum写法类似，不用加引号，且内部字段不受外部环境干扰。
+-- 从别的语言里复制一段enum代码到lua时会变得方便。
 -- firstindex: index from,default 1
 -- eg:
 -- local Thursday="a good day"
@@ -287,7 +287,7 @@ function script(sargs)
         if not f then 
             prefix = "return function("..sargs..") "
             suffix = " end"
-            f = loadstring(prefix..s..suffix)
+            f,err = loadstring(prefix..s..suffix)
         end
         if not f then
             error(err,2)
@@ -300,7 +300,7 @@ end
 
 
 
---use functional.bind instead
+--use 'functional.bind' instead
 --@Ability:
 -- better impliment of Handler,useful in cocos-event-callback,DEPRACATED
 -- jump to file './functional.lua'
@@ -338,8 +338,6 @@ end
 
 --用 _ 变量名代替nil，方便传空值、赋空值。
 --需要NIL_ALWAYS_VAR_ENABLED为真才能用。在config.lua里配置。
---开启前：local _ = ...
---开启后可以去掉local,全局变量 _ 不管怎么赋值永远是nil
 if NIL_ALWAYS_VAR_ENABLED then
     _G._ = nil
     setmetatable(_G,{

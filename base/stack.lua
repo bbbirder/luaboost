@@ -1,3 +1,5 @@
+-- author:bbbirder
+-- wont ignore nil
 local stack = {}
 
 function stack.stack()

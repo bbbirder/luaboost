@@ -37,10 +37,6 @@ end
 
 
 
-
-
-
-
 --@Ability:
 -- 类似std::functional中的bind
 -- 占位符‘_x’表示第x个参数,它是用时自动创建的。_0到_3因为常用所以提前手动创建了，用到_5的时候，bind会自动创建占位符_5，不需要操心。
@@ -136,13 +132,13 @@ setmetatable(functional,{
 function functional.procedure(_funclist)
     return function(...)
         local ret = ...
+        local uparg = {select(2,...)}
         for k,func in ipairs(_funclist) do
-            ret = func(ret)
+            ret = func(ret,unpack(uparg))
         end
         return ret
     end
 end
-
 
 
 
@@ -259,15 +255,6 @@ functional.retot  = functional.o_o--owner table
 
         functional.retscr = functional.s_s--normal script   
         functional.retss  = functional.S_S--short script    
-
-
-
-
-
-
-
-
-
 
 
 

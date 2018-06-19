@@ -20,12 +20,12 @@
 			三个递归参数分表表示：根节点、子节点路径、组件名称。传空表示跳过。
 		例子：
 			local txt = FindObject(myNode) "Btn/Label" "UILabel" .text
-			local go  = FindObject(myNode) "Btn/Label" ()        .activeSelf = false
+			local act = FindObject(myNode) "Btn/Label" ()        .activeSelf
 	csarr:
 		遍历一个来自CS的数组或List对象,每步返回下标和对应成员，下标从0开始。
-		如果参数是transfrom,则遍历子物体。
-		for i,v in csarr(go:GetComponents(...)) do
-			...
+		如果参数是transfrom,则遍历直属子物体。
+		for i,v in csarr(go) do
+			v:SetActive(false)
 		end
 ]]
 local GameObject = CS.UnityEngine.GameObject
@@ -115,14 +115,29 @@ end
 				end,
 				ReleaseAllEvents = function(t)
 					for go,events in pairs(t.__uievents) do for en,func in pairs(events) do
+						--released objects
 						print(("auto release event: [%s] of [%s]"):format(tostring(en),tostring(go)))
+						if tostring(go)=="<invalid c# object>" or tostring(go):sub(1,5)=="null:" then
+							print"ignore released obj"
+							goto continue 
+						end
 						if   en=="timer"
 						then go:ClearTimer(func)
 							 go:UpdateTimers()
-						else CS.UIEventListener.Get(go)[en] = nil
+						else CS.UIEventListener.Get(go)[en] = nil 
 						end
+						::continue::
 					end end
 
+					for k,v in pairs(Timer.__allTimers) do
+						v:ClearAllTimers()
+					end
+					
+					--FIX ME: release prize node
+						if PrizeNode then
+							PrizeNode.Destroy()
+							PrizeNode = nil
+						end
 				end,
 			}
 			function ReleaseAllEvents()
@@ -131,7 +146,7 @@ end
 			function GetAnyEvent(go)
 				
 				local  __index = function(t,k)
-					if k=="SetTimer" then return function(_,func,interval)
+					if k=="SetTimer" then return function(_,func,interval)--Depracated
 						local comp = go:GetComponent"ShinobiMono"
 
 						return comp
@@ -161,6 +176,15 @@ end
 			end
 			-- better than FindObject
 			function FindObject(go)
+				local _typ = type(go)
+				if _typ~="table" and _typ~="userdata" then
+					error("root go is not a valid type:".._typ,2)
+				end
+				if not go.transform then
+					error("root go does not have transform",2)
+				end
+
+				
 				go = go.transform
 
 				return function(path)
@@ -204,7 +228,13 @@ client,PacketUtils = (function(t) return t,t end){
 	    local req = CS.ProtoClass[msg]()
 	    req.token = CS.BY_GlobalData.myData.token
 	    for k,v in pairs(body or {}) do
-	    	req[k] = v
+	    	if type(v)=="table" then
+	    		for i,v in ipairs(v) do
+	    			req[k]:Add(v)
+	    		end
+	    	else
+	    		req[k] = v
+	    	end
 	    end
 	    CS.XLuaUtils.SendProtoBuf(req)
 	    return true
@@ -224,7 +254,7 @@ function csarr(arr)
 		return arr[i]
 	end
 	local function trans_getter(arr,i)
-		return arr:GetChild(i)
+		return arr.transform:GetChild(i)
 	end
 
 	local getter,len
@@ -232,7 +262,7 @@ function csarr(arr)
 	if len then
 		getter = arr_getter
 	else
-		len = arr.childCount
+		len = arr.transform.childCount
 		if len then
 			getter = trans_getter
 		end
@@ -240,8 +270,36 @@ function csarr(arr)
 
 	local i   = ~0
 	return function()
-		i = i + 1
+		i = -~i
 		if i>=len then return end
 		return i,getter(arr,i)
 	end
+end
+
+function cstree(arr)
+	local function dump(t)
+		for k,v in csarr(t) do
+			coroutine.yield(k,v)
+			if v.Length or v.Count or v.childCount then dump(v) end
+		end
+	end
+	local co = coroutine.create(function() dump(arr) end)
+	return function()
+		return select(2,coroutine.resume(co))
+	end
+end
+
+function cslen(arr)
+	arr = makeMutable(arr)
+	return arr.Length or arr.Count or arr.childCount or #arr
+end
+
+function SetIconURL(tex,url)
+	local imgId = tonumber(url)
+	InstOf("MyRoot"):SetWXIcon(
+		imgId and 1 or 2, 
+		imgId or  0, 
+		tostring(url),
+		tex
+	)
 end
